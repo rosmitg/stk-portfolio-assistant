@@ -1,0 +1,27 @@
+# Environment
+.env
+.langsmith
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+
+# Tools
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Build
+dist/
+build/
+
+# Data / DB
+chroma_db/
+
+# Frontend
+node_modules/
+
+# OS
+.DS_Store

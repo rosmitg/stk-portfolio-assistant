@@ -1,0 +1,31 @@
+# Web framework
+fastapi==0.111.0
+uvicorn[standard]==0.30.1
+
+# LangChain + Claude
+langchain==0.2.6
+langchain-anthropic==0.1.19
+langchain-community==0.2.6
+
+# Vector stores
+chromadb==0.5.3
+pinecone-client==4.1.0
+
+# Observability
+langsmith==0.1.77
+
+# Data
+yfinance==0.2.40
+newsapi-python==0.2.7
+
+# Config / validation
+pydantic==2.7.4
+pydantic-settings==2.3.3
+
+# Database
+sqlalchemy==2.0.31
+
+# Dev / QA
+pytest==8.2.2
+ruff==0.4.7
+mypy==1.10.0
