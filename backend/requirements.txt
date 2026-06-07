@@ -7,6 +7,10 @@ langchain==0.2.6
 langchain-anthropic==0.1.19
 langchain-community==0.2.6
 
+# Embeddings
+voyageai
+langchain-voyageai
+
 # Vector stores
 chromadb==0.5.3
 pinecone-client==4.1.0

@@ -3,14 +3,17 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.routes import api_router
 from app.core.config import settings
+from app.services.data_ingestion import fetch_and_ingest_ticker_data
+from app.services.vector_store import get_document_count
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
+    if get_document_count() == 0:
+        await fetch_and_ingest_ticker_data()
     yield
-    # Shutdown
 
 
 app = FastAPI(
@@ -28,6 +31,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(api_router)
 
 
 @app.get("/health", tags=["ops"])
