@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -7,6 +8,12 @@ from app.api.routes import api_router
 from app.core.config import settings
 from app.services.data_ingestion import fetch_and_ingest_ticker_data
 from app.services.vector_store import get_document_count
+
+# Enable LangSmith tracing before any LangChain components are initialised
+if settings.langchain_tracing_v2 and settings.langchain_api_key:
+    os.environ["LANGCHAIN_TRACING_V2"] = "true"
+    os.environ["LANGCHAIN_API_KEY"] = settings.langchain_api_key
+    os.environ["LANGCHAIN_PROJECT"] = settings.langchain_project
 
 
 @asynccontextmanager

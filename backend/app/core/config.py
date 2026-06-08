@@ -15,6 +15,7 @@ class Settings(BaseSettings):
 
     anthropic_api_key: str
 
+    langchain_tracing_v2: bool = False
     langchain_api_key: Optional[str] = None
     langchain_project: str = "stk-portfolio-assistant"
 

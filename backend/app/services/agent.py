@@ -6,6 +6,7 @@ import yfinance as yf
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.tools import tool
+from langsmith import traceable
 
 from app.core.config import settings
 from app.services.llm import get_llm
@@ -219,6 +220,7 @@ def _extract_sources(intermediate_steps: list) -> list[str]:
     return sorted(tickers)
 
 
+@traceable(name="portfolio-agent-query", run_type="chain")
 async def run_agent_query(
     message: str,
     portfolio_holdings: Optional[list[dict]] = None,
