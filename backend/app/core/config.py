@@ -1,3 +1,5 @@
+from typing import Optional
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -8,26 +10,25 @@ class Settings(BaseSettings):
         case_sensitive=False,
     )
 
-    # App
     app_env: str = "development"
     debug: bool = False
 
-    # Claude (Anthropic)
     anthropic_api_key: str
 
-    # LangSmith
-    langchain_api_key: str
+    langchain_api_key: Optional[str] = None
     langchain_project: str = "stk-portfolio-assistant"
 
-    # NewsAPI
-    news_api_key: str
+    voyage_api_key: Optional[str] = None
 
-    # Pinecone
-    pinecone_api_key: str
-    pinecone_environment: str
+    news_api_key: Optional[str] = None
 
-    # Database
-    database_url: str
+    pinecone_api_key: Optional[str] = None
+    pinecone_environment: Optional[str] = None
+
+    database_url: Optional[str] = None
+
+    chroma_persist_dir: str = "./chroma_db"
+    chroma_collection_name: str = "portfolio_data"
 
 
 settings = Settings()
