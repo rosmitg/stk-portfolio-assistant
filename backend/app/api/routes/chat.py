@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 
 from app.schemas.schemas import ChatRequest, ChatResponse
-from app.services.rag import run_rag_query
+from app.services.agent import run_agent_query
 
 router = APIRouter(tags=["chat"])
 
@@ -9,7 +9,7 @@ router = APIRouter(tags=["chat"])
 @router.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest) -> ChatResponse:
     try:
-        answer, sources = await run_rag_query(request.message)
+        answer, sources = await run_agent_query(request.message, request.portfolio_holdings)
         return ChatResponse(answer=answer, sources=sources)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
