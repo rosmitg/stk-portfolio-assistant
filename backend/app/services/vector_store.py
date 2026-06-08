@@ -29,7 +29,15 @@ def get_vector_store() -> Chroma:
     return _vector_store
 
 
+def clear_collection() -> None:
+    store = get_vector_store()
+    result = store._collection.get()
+    if result["ids"]:
+        store._collection.delete(ids=result["ids"])
+
+
 async def ingest_documents(documents: list[Document]) -> int:
+    clear_collection()
     store = get_vector_store()
     ids = store.add_documents(documents)
     return len(ids)

@@ -25,7 +25,7 @@ def _format_docs(docs: list) -> str:
 async def run_rag_query(question: str) -> tuple[str, list[str]]:
     llm = get_llm()
     vector_store = get_vector_store()
-    retriever = vector_store.as_retriever(search_kwargs={"k": 4})
+    retriever = vector_store.as_retriever(search_kwargs={"k": 10})
 
     docs = await retriever.ainvoke(question)
     context = _format_docs(docs)
