@@ -7,6 +7,10 @@ langchain==0.2.6
 langchain-anthropic==0.1.19
 langchain-community==0.2.6
 
+# Embeddings
+voyageai
+langchain-voyageai
+
 # Vector stores
 chromadb==0.5.3
 pinecone-client==4.1.0
@@ -24,6 +28,8 @@ pydantic-settings==2.3.3
 
 # Database
 sqlalchemy==2.0.31
+asyncpg==0.29.0
+psycopg2-binary==2.9.9
 
 # Dev / QA
 pytest==8.2.2

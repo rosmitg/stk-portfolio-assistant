@@ -1,16 +1,28 @@
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.routes import api_router
 from app.core.config import settings
+from app.services.data_ingestion import fetch_and_ingest_ticker_data
+from app.services.database import init_db
+from app.services.vector_store import get_document_count
+
+# Enable LangSmith tracing before any LangChain components are initialised
+if settings.langchain_tracing_v2 and settings.langchain_api_key:
+    os.environ["LANGCHAIN_TRACING_V2"] = "true"
+    os.environ["LANGCHAIN_API_KEY"] = settings.langchain_api_key
+    os.environ["LANGCHAIN_PROJECT"] = settings.langchain_project
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
+    await init_db()
+    if get_document_count() == 0:
+        await fetch_and_ingest_ticker_data()
     yield
-    # Shutdown
 
 
 app = FastAPI(
@@ -28,6 +40,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(api_router)
 
 
 @app.get("/health", tags=["ops"])
