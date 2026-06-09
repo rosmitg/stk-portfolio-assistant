@@ -4,6 +4,7 @@ from typing import Optional
 
 import yfinance as yf
 from langchain.agents import AgentExecutor, create_tool_calling_agent
+from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.tools import tool
 from langsmith import traceable
@@ -171,6 +172,7 @@ def _build_executor(portfolio_context: str) -> AgentExecutor:
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", system_text),
+        MessagesPlaceholder("chat_history", optional=True),
         ("human", "{input}"),
         MessagesPlaceholder("agent_scratchpad"),
     ])
@@ -224,7 +226,8 @@ def _extract_sources(intermediate_steps: list) -> list[str]:
 async def run_agent_query(
     message: str,
     portfolio_holdings: Optional[list[dict]] = None,
-) -> tuple[str, list[str]]:
+    conversation_history: Optional[list[dict]] = None,
+) -> tuple[str, list[str], list[dict]]:
     portfolio_context = ""
     if portfolio_holdings:
         lines = [
@@ -233,8 +236,17 @@ async def run_agent_query(
         ]
         portfolio_context = "\n".join(lines)
 
+    chat_messages = []
+    for entry in (conversation_history or []):
+        role = entry.get("role", "")
+        content = entry.get("content", "")
+        if role == "user":
+            chat_messages.append(HumanMessage(content=content))
+        elif role == "assistant":
+            chat_messages.append(AIMessage(content=content))
+
     executor = _build_executor(portfolio_context)
-    result = await executor.ainvoke({"input": message})
+    result = await executor.ainvoke({"input": message, "chat_history": chat_messages})
 
     raw = result.get("output", "")
     if isinstance(raw, list):
@@ -246,4 +258,8 @@ async def run_agent_query(
     else:
         answer = raw
     sources = _extract_sources(result.get("intermediate_steps", []))
-    return answer, sources
+
+    updated_history = list(conversation_history or [])
+    updated_history.append({"role": "user", "content": message})
+    updated_history.append({"role": "assistant", "content": answer})
+    return answer, sources, updated_history

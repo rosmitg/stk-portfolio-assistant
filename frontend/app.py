@@ -158,6 +158,8 @@ tab_chat, tab_portfolio = st.tabs(["💬  Chat", "📊  Portfolio"])
 with tab_chat:
     if "messages" not in st.session_state:
         st.session_state.messages = []
+    if "conversation_history" not in st.session_state:
+        st.session_state.conversation_history = []
 
     if not st.session_state.messages:
         st.markdown("""
@@ -212,7 +214,10 @@ with tab_chat:
     if submitted and user_input.strip():
         st.session_state.messages.append({"role": "user", "content": user_input.strip()})
         with st.spinner("Thinking…"):
-            data, err = backend_post("/api/v1/chat", {"message": user_input.strip()})
+            data, err = backend_post("/api/v1/chat", {
+                "message": user_input.strip(),
+                "conversation_history": st.session_state.conversation_history,
+            })
         if err:
             st.markdown(f'<div class="error-box">⚠️ {err}</div>', unsafe_allow_html=True)
         else:
@@ -221,11 +226,13 @@ with tab_chat:
                 "content": data["answer"],
                 "sources": data.get("sources", []),
             })
+            st.session_state.conversation_history = data.get("conversation_history", [])
         st.rerun()
 
     if st.session_state.messages:
         if st.button("Clear chat", type="secondary"):
             st.session_state.messages = []
+            st.session_state.conversation_history = []
             st.rerun()
 
 # ── Portfolio tab ─────────────────────────────────────────────────────────────

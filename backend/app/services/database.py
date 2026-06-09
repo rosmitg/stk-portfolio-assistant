@@ -11,12 +11,19 @@ _engine = None
 _session_factory: Optional[async_sessionmaker] = None
 
 
+def _async_url(url: str) -> str:
+    """Ensure the URL uses an async driver scheme."""
+    if url.startswith("postgresql://"):
+        return url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    return url
+
+
 def _init_engine() -> None:
     global _engine, _session_factory
     if _engine is not None or not settings.database_url:
         return
     _engine = create_async_engine(
-        settings.database_url,
+        _async_url(settings.database_url),
         pool_pre_ping=True,
         echo=settings.debug,
     )
@@ -30,9 +37,12 @@ async def init_db() -> None:
         logger.info("DATABASE_URL not set — skipping table creation")
         return
     from app.models.portfolio import Base
-    async with _engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    logger.info("Database tables created/verified")
+    try:
+        async with _engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        logger.info("Database tables created/verified")
+    except Exception as exc:
+        logger.warning("Database unavailable at startup (%s) — continuing without it", exc)
 
 
 async def get_db() -> AsyncGenerator[Optional[AsyncSession], None]:
