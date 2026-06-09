@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import api_router
 from app.core.config import settings
 from app.services.data_ingestion import fetch_and_ingest_ticker_data
+from app.services.database import init_db
 from app.services.vector_store import get_document_count
 
 # Enable LangSmith tracing before any LangChain components are initialised
@@ -18,6 +19,7 @@ if settings.langchain_tracing_v2 and settings.langchain_api_key:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    await init_db()
     if get_document_count() == 0:
         await fetch_and_ingest_ticker_data()
     yield

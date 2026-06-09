@@ -1,0 +1,91 @@
+substitutions:
+  _REGION: australia-southeast1
+  _BACKEND_IMAGE: australia-southeast1-docker.pkg.dev/stk-portfolio-assistant-498901/stk-portfolio/backend
+  _FRONTEND_IMAGE: australia-southeast1-docker.pkg.dev/stk-portfolio-assistant-498901/stk-portfolio/frontend
+  _CLOUDSQL_INSTANCE: stk-portfolio-assistant-498901:australia-southeast1:stk-portfolio-db
+  _TAG: latest
+
+steps:
+  # ── Build ──────────────────────────────────────────────────────────────────
+
+  - id: build-backend
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --platform=linux/amd64
+      - -t=$_BACKEND_IMAGE:$_TAG
+      - -t=$_BACKEND_IMAGE:latest
+      - backend
+    waitFor: ['-']
+
+  - id: build-frontend
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --platform=linux/amd64
+      - -t=$_FRONTEND_IMAGE:$_TAG
+      - -t=$_FRONTEND_IMAGE:latest
+      - frontend
+    waitFor: ['-']
+
+  # ── Push ───────────────────────────────────────────────────────────────────
+
+  - id: push-backend
+    name: gcr.io/cloud-builders/docker
+    args: [push, --all-tags, $_BACKEND_IMAGE]
+    waitFor: [build-backend]
+
+  - id: push-frontend
+    name: gcr.io/cloud-builders/docker
+    args: [push, --all-tags, $_FRONTEND_IMAGE]
+    waitFor: [build-frontend]
+
+  # ── Deploy backend ─────────────────────────────────────────────────────────
+
+  - id: deploy-backend
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - stk-backend
+      - --image=$_BACKEND_IMAGE:$_TAG
+      - --region=$_REGION
+      - --platform=managed
+      - --port=8080
+      - --allow-unauthenticated
+      - --memory=512Mi
+      - --cpu=1
+      - --min-instances=0
+      - --max-instances=3
+      - --add-cloudsql-instances=$_CLOUDSQL_INSTANCE
+      - --set-secrets=ANTHROPIC_API_KEY=ANTHROPIC_API_KEY:latest,VOYAGE_API_KEY=VOYAGE_API_KEY:latest,NEWS_API_KEY=NEWS_API_KEY:latest,LANGCHAIN_API_KEY=LANGCHAIN_API_KEY:latest,LANGCHAIN_PROJECT=LANGCHAIN_PROJECT:latest,DATABASE_URL=DATABASE_URL:latest
+      - --set-env-vars=APP_ENV=production,LANGCHAIN_TRACING_V2=true
+    waitFor: [push-backend]
+
+  # ── Deploy frontend (needs backend URL) ────────────────────────────────────
+
+  - id: deploy-frontend
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: bash
+    args:
+      - '-c'
+      - |
+        BACKEND_URL=$(gcloud run services describe stk-backend \
+          --region=$_REGION \
+          --format="value(status.url)")
+        gcloud run deploy stk-frontend \
+          --image=$_FRONTEND_IMAGE:$_TAG \
+          --region=$_REGION \
+          --platform=managed \
+          --port=8080 \
+          --allow-unauthenticated \
+          --memory=512Mi \
+          --cpu=1 \
+          --min-instances=0 \
+          --max-instances=3 \
+          --set-env-vars="BACKEND_URL=$$BACKEND_URL,APP_ENV=production"
+    waitFor: [push-frontend, deploy-backend]
+
+options:
+  logging: CLOUD_LOGGING_ONLY

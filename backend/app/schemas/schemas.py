@@ -22,3 +22,10 @@ class PortfolioHolding(BaseModel):
     market_value: float
     gain_loss: float
     gain_loss_pct: float
+
+
+class AddHoldingRequest(BaseModel):
+    ticker: str = Field(..., min_length=1, max_length=10)
+    name: str = Field(..., min_length=1, max_length=255)
+    shares: float = Field(..., gt=0)
+    avg_cost: float = Field(..., gt=0)
