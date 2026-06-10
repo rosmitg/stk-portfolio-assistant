@@ -28,6 +28,17 @@ _STATIC_STOCK_DATA: dict[str, dict] = {
 def ticker_info(ticker: str) -> str:
     """Get the current stock price and basic market info for a ticker symbol (e.g. AAPL, MSFT)."""
     sym = ticker.upper().strip()
+
+    # Try Alpaca first for real-time price
+    try:
+        from app.services.alpaca_service import get_live_price
+        price = get_live_price(sym)
+        if price is not None:
+            return json.dumps({"ticker": sym, "price": price, "source": "alpaca"})
+    except Exception:
+        pass
+
+    # Fall back to yfinance
     try:
         fi = yf.Ticker(sym).fast_info
         price = fi.last_price
@@ -40,18 +51,20 @@ def ticker_info(ticker: str) -> str:
             "market_cap": getattr(fi, "market_cap", None),
             "52w_high": getattr(fi, "year_high", None),
             "52w_low": getattr(fi, "year_low", None),
+            "source": "yfinance",
         })
     except Exception as exc:
         logger.warning("yfinance error for %s (%s), using static fallback", sym, exc)
-        static = _STATIC_STOCK_DATA.get(sym)
-        if static:
-            return json.dumps({
-                "ticker": sym,
-                "name": static["name"],
-                "price": static["price"],
-                "note": "static fallback — live data unavailable",
-            })
-        return json.dumps({"error": f"Could not retrieve data for {sym}"})
+
+    static = _STATIC_STOCK_DATA.get(sym)
+    if static:
+        return json.dumps({
+            "ticker": sym,
+            "name": static["name"],
+            "price": static["price"],
+            "note": "static fallback — live data unavailable",
+        })
+    return json.dumps({"error": f"Could not retrieve data for {sym}"})
 
 
 @tool

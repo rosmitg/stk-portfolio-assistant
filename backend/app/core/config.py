@@ -28,6 +28,10 @@ class Settings(BaseSettings):
 
     database_url: Optional[str] = None
 
+    alpaca_api_key: Optional[str] = None
+    alpaca_secret_key: Optional[str] = None
+    alpaca_base_url: str = "https://paper-api.alpaca.markets"
+
     chroma_persist_dir: str = "./chroma_db"
     chroma_collection_name: str = "portfolio_data"
 
