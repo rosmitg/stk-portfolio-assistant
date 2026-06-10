@@ -1,7 +1,10 @@
+import logging
 import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+
+logger = logging.getLogger(__name__)
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import api_router
@@ -19,7 +22,10 @@ if settings.langchain_tracing_v2 and settings.langchain_api_key:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await init_db()
+    try:
+        await init_db()
+    except Exception as exc:
+        logger.warning("Database unavailable at startup (%s) — continuing without it", exc)
     if get_document_count() == 0:
         await fetch_and_ingest_ticker_data()
     yield
