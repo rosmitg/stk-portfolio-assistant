@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 CsvFile = Annotated[UploadFile, File(description="CSV with columns: ticker, shares, avg_cost")]
 
+from app.core.auth import CurrentUser
 from app.models.portfolio import Holding
 from app.schemas.schemas import AddHoldingRequest, PortfolioHolding
 from app.services.database import get_db
@@ -22,8 +23,6 @@ _STATIC_PRICES: dict[str, float] = {
 }
 
 Db = Annotated[Optional[AsyncSession], Depends(get_db)]
-
-_DEFAULT_USER = "default"
 
 
 def _enrich(holding: Holding) -> PortfolioHolding:
@@ -69,6 +68,7 @@ def _enrich(holding: Holding) -> PortfolioHolding:
 
 async def _upsert_holding(
     db: AsyncSession,
+    user_id: str,
     ticker: str,
     name: str,
     shares: float,
@@ -76,7 +76,7 @@ async def _upsert_holding(
 ) -> Holding:
     result = await db.execute(
         select(Holding).where(
-            Holding.user_id == _DEFAULT_USER,
+            Holding.user_id == user_id,
             Holding.ticker == ticker,
         )
     )
@@ -87,7 +87,7 @@ async def _upsert_holding(
         existing.name = name
         return existing
     holding = Holding(
-        user_id=_DEFAULT_USER,
+        user_id=user_id,
         ticker=ticker,
         name=name,
         shares=shares,
@@ -98,12 +98,12 @@ async def _upsert_holding(
 
 
 @router.get("/portfolio", response_model=list[PortfolioHolding])
-async def get_portfolio(db: Db) -> list[PortfolioHolding]:
+async def get_portfolio(user_id: CurrentUser, db: Db) -> list[PortfolioHolding]:
     if db is None:
         return []
     try:
         result = await db.execute(
-            select(Holding).where(Holding.user_id == _DEFAULT_USER).order_by(Holding.created_at)
+            select(Holding).where(Holding.user_id == user_id).order_by(Holding.created_at)
         )
         return [_enrich(h) for h in result.scalars().all()]
     except Exception as exc:
@@ -112,12 +112,13 @@ async def get_portfolio(db: Db) -> list[PortfolioHolding]:
 
 
 @router.post("/portfolio", response_model=PortfolioHolding, status_code=201)
-async def add_holding(body: AddHoldingRequest, db: Db) -> PortfolioHolding:
+async def add_holding(body: AddHoldingRequest, user_id: CurrentUser, db: Db) -> PortfolioHolding:
     if db is None:
         raise HTTPException(status_code=503, detail="Database not configured")
     try:
         holding = await _upsert_holding(
             db,
+            user_id=user_id,
             ticker=body.ticker.upper(),
             name=body.name,
             shares=body.shares,
@@ -131,7 +132,7 @@ async def add_holding(body: AddHoldingRequest, db: Db) -> PortfolioHolding:
 
 
 @router.post("/portfolio/sync-alpaca", response_model=list[PortfolioHolding])
-async def sync_from_alpaca(db: Db) -> list[PortfolioHolding]:
+async def sync_from_alpaca(user_id: CurrentUser, db: Db) -> list[PortfolioHolding]:
     if db is None:
         raise HTTPException(status_code=503, detail="Database not configured")
     try:
@@ -149,6 +150,7 @@ async def sync_from_alpaca(db: Db) -> list[PortfolioHolding]:
         for pos in positions:
             await _upsert_holding(
                 db,
+                user_id=user_id,
                 ticker=pos["ticker"],
                 name=pos["name"],
                 shares=pos["quantity"],
@@ -156,7 +158,7 @@ async def sync_from_alpaca(db: Db) -> list[PortfolioHolding]:
             )
         await db.commit()
         result = await db.execute(
-            select(Holding).where(Holding.user_id == _DEFAULT_USER).order_by(Holding.created_at)
+            select(Holding).where(Holding.user_id == user_id).order_by(Holding.created_at)
         )
         return [_enrich(h) for h in result.scalars().all()]
     except Exception as exc:
@@ -164,7 +166,7 @@ async def sync_from_alpaca(db: Db) -> list[PortfolioHolding]:
 
 
 @router.post("/portfolio/upload-csv", response_model=list[PortfolioHolding])
-async def upload_csv(file: CsvFile, db: Db) -> list[PortfolioHolding]:
+async def upload_csv(file: CsvFile, user_id: CurrentUser, db: Db) -> list[PortfolioHolding]:
     if db is None:
         raise HTTPException(status_code=503, detail="Database not configured")
 
@@ -204,10 +206,10 @@ async def upload_csv(file: CsvFile, db: Db) -> list[PortfolioHolding]:
 
     try:
         for ticker, name, shares, avg_cost in parsed:
-            await _upsert_holding(db, ticker=ticker, name=name, shares=shares, avg_cost=avg_cost)
+            await _upsert_holding(db, user_id=user_id, ticker=ticker, name=name, shares=shares, avg_cost=avg_cost)
         await db.commit()
         result = await db.execute(
-            select(Holding).where(Holding.user_id == _DEFAULT_USER).order_by(Holding.created_at)
+            select(Holding).where(Holding.user_id == user_id).order_by(Holding.created_at)
         )
         return [_enrich(h) for h in result.scalars().all()]
     except Exception as exc:
@@ -215,12 +217,12 @@ async def upload_csv(file: CsvFile, db: Db) -> list[PortfolioHolding]:
 
 
 @router.delete("/portfolio/{ticker}", status_code=204)
-async def delete_holding(ticker: str, db: Db) -> None:
+async def delete_holding(ticker: str, user_id: CurrentUser, db: Db) -> None:
     if db is None:
         raise HTTPException(status_code=503, detail="Database not configured")
     await db.execute(
         delete(Holding).where(
-            Holding.user_id == _DEFAULT_USER,
+            Holding.user_id == user_id,
             Holding.ticker == ticker.upper(),
         )
     )

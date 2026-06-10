@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Optional
+from typing import AsyncGenerator, Optional
 
 import yfinance as yf
 from langchain.agents import AgentExecutor, create_tool_calling_agent
@@ -195,6 +195,7 @@ def _build_executor(portfolio_context: str) -> AgentExecutor:
         agent=agent,
         tools=tools,
         max_iterations=10,
+        max_execution_time=60,
         return_intermediate_steps=True,
     )
 
@@ -231,6 +232,57 @@ def _extract_sources(intermediate_steps: list) -> list[str]:
                 except (json.JSONDecodeError, TypeError):
                     pass
     return sorted(tickers)
+
+
+async def stream_agent_query(
+    message: str,
+    portfolio_holdings: Optional[list[dict]] = None,
+) -> AsyncGenerator[dict, None]:
+    portfolio_context = ""
+    if portfolio_holdings:
+        lines = [
+            f"- {h.get('ticker', '').upper()}: {h.get('quantity', 0)} shares @ avg ${float(h.get('avg_buy_price', 0)):.2f}"
+            for h in portfolio_holdings
+        ]
+        portfolio_context = "\n".join(lines)
+
+    executor = _build_executor(portfolio_context)
+    sources: set[str] = set()
+
+    async for event in executor.astream_events({"input": message}, version="v2"):
+        kind = event["event"]
+
+        if kind == "on_chat_model_stream":
+            chunk = event["data"].get("chunk")
+            if not chunk:
+                continue
+            content = chunk.content
+            if isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict) and block.get("type") == "text":
+                        text = block.get("text", "")
+                        if text:
+                            yield {"type": "token", "text": text}
+            elif isinstance(content, str) and content:
+                yield {"type": "token", "text": content}
+
+        elif kind == "on_tool_end":
+            tool_name = event.get("name", "")
+            inp = event["data"].get("input") or {}
+            if tool_name in ("ticker_info", "news_headlines"):
+                ticker = (inp.get("ticker") or "").upper()
+                if ticker and 1 <= len(ticker) <= 6:
+                    sources.add(ticker)
+            elif tool_name == "portfolio_calculator":
+                try:
+                    items = json.loads(inp.get("holdings_json") or "[]")
+                    for item in items:
+                        if isinstance(item, dict) and "ticker" in item:
+                            sources.add(item["ticker"].upper())
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+    yield {"type": "done", "sources": sorted(sources)}
 
 
 @traceable(name="portfolio-agent-query", run_type="chain")

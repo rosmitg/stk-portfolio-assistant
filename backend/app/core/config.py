@@ -28,6 +28,9 @@ class Settings(BaseSettings):
 
     database_url: Optional[str] = None
 
+    supabase_url: Optional[str] = None
+    supabase_service_key: Optional[str] = None
+
     alpaca_api_key: Optional[str] = None
     alpaca_secret_key: Optional[str] = None
     alpaca_base_url: str = "https://paper-api.alpaca.markets"
