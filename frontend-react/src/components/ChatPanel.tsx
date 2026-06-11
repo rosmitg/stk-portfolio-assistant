@@ -93,15 +93,34 @@ function MarkdownText({ text }: { text: string }) {
   );
 }
 
+const LS_MESSAGES = 'stk_chat_messages';
+const LS_HISTORY  = 'stk_chat_history';
+
 interface ChatPanelProps {
   holdings: Holding[];
 }
 
 export function ChatPanel({ holdings }: ChatPanelProps) {
-  const [messages, setMessages] = useState<ChatMessage[]>(() => [buildWelcome(holdings)]);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    try {
+      const saved = localStorage.getItem(LS_MESSAGES);
+      if (saved) return JSON.parse(saved) as ChatMessage[];
+    } catch { /* corrupted — fall through */ }
+    return [buildWelcome(holdings)];
+  });
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Persist messages and derived conversation history on every change
+  useEffect(() => {
+    localStorage.setItem(LS_MESSAGES, JSON.stringify(messages));
+    const history = messages
+      .slice(1)
+      .filter((m) => m.content)
+      .map(({ role, content }) => ({ role, content }));
+    localStorage.setItem(LS_HISTORY, JSON.stringify(history));
+  }, [messages]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -154,6 +173,8 @@ export function ChatPanel({ holdings }: ChatPanelProps) {
   };
 
   const handleClear = () => {
+    localStorage.removeItem(LS_MESSAGES);
+    localStorage.removeItem(LS_HISTORY);
     setMessages([buildWelcome(holdings)]);
   };
 

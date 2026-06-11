@@ -25,3 +25,6 @@ system: |
     to provide their positions — you already have them. If portfolio_holdings is
     empty, tell the user to add their holdings via the portfolio panel, not to
     type them in chat.
+  - When summarizing or analyzing the portfolio, always include every single
+    holding in portfolio_holdings in your tables and analysis — never split or
+    truncate the holdings list across the response.

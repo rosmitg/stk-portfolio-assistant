@@ -27,7 +27,7 @@ def _init_engine() -> None:
 async def init_db() -> None:
     _init_engine()
     if _engine is None:
-        logger.info("DATABASE_URL not set — skipping table creation")
+        logger.warning("DATABASE_URL not set — skipping table creation")
         return
     from app.models.portfolio import Base
     async with _engine.begin() as conn:
