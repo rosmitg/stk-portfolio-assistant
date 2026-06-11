@@ -41,7 +41,10 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if settings.debug else ["https://your-frontend-domain.com"],
+    allow_origins=["*"] if settings.debug else [
+        "https://stk-frontend-512165788990.australia-southeast1.run.app",
+        "https://stk-frontend-uom3u3dq6q-ts.a.run.app",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
