@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -26,8 +27,11 @@ async def lifespan(app: FastAPI):
         await init_db()
     except Exception as exc:
         logger.warning("Database unavailable at startup (%s) — continuing without it", exc)
+    # Fire ingestion as a background task so the app yields (becomes ready) immediately
+    # rather than blocking for ~2 minutes on every cold start, which caused Cloud Run
+    # to route requests to the not-yet-ready instance and return 503s.
     if get_document_count() == 0:
-        await fetch_and_ingest_ticker_data()
+        asyncio.create_task(fetch_and_ingest_ticker_data())
     yield
 
 

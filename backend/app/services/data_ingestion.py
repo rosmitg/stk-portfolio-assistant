@@ -1,9 +1,5 @@
-import asyncio
 import logging
-import time
 
-import requests
-import yfinance as yf
 from langchain_core.documents import Document
 
 from app.services.vector_store import ingest_documents
@@ -11,11 +7,6 @@ from app.services.vector_store import ingest_documents
 logger = logging.getLogger(__name__)
 
 TICKERS = ["AAPL", "MSFT", "NVDA", "TSLA", "AMZN"]
-
-_USER_AGENT = "stk-portfolio-assistant/0.1 (portfolio research tool)"
-_MAX_RETRIES = 3
-_BACKOFF_SECONDS = [2, 4, 8]
-_INTER_TICKER_DELAY = 2
 
 # Static fallback data — used when Yahoo Finance is unavailable or rate-limited.
 # Prices and ratios are representative ranges, not real-time quotes.
@@ -175,110 +166,10 @@ def _static_documents(ticker: str) -> list[Document]:
     return [info_doc, history_doc]
 
 
-def _make_session() -> requests.Session:
-    s = requests.Session()
-    s.headers.update({"User-Agent": _USER_AGENT})
-    return s
-
-
-def _fetch_ticker_documents(ticker: str, session: requests.Session) -> list[Document]:
-    stock = yf.Ticker(ticker, session=session)
-    info = stock.info
-    hist = stock.history(period="5d")
-
-    name = info.get("longName", ticker)
-    sector = info.get("sector", "N/A")
-    industry = info.get("industry", "N/A")
-    market_cap = info.get("marketCap") or 0
-    pe_trailing = info.get("trailingPE", "N/A")
-    pe_forward = info.get("forwardPE", "N/A")
-    week_high = info.get("fiftyTwoWeekHigh", "N/A")
-    week_low = info.get("fiftyTwoWeekLow", "N/A")
-    current_price = info.get("currentPrice") or info.get("regularMarketPrice", "N/A")
-    div_yield = info.get("dividendYield")
-    div_pct = f"{div_yield * 100:.2f}%" if isinstance(div_yield, float) else "N/A"
-    summary = (info.get("longBusinessSummary") or "")[:500]
-
-    info_doc = Document(
-        page_content=(
-            f"Stock: {ticker} ({name})\n"
-            f"Sector: {sector}\n"
-            f"Industry: {industry}\n"
-            f"Current Price: ${current_price}\n"
-            f"Market Cap: ${market_cap:,.0f}\n"
-            f"P/E Ratio (Trailing): {pe_trailing}\n"
-            f"P/E Ratio (Forward): {pe_forward}\n"
-            f"52-Week High: ${week_high}\n"
-            f"52-Week Low: ${week_low}\n"
-            f"Dividend Yield: {div_pct}\n"
-            f"Business Summary: {summary}"
-        ),
-        metadata={"ticker": ticker, "name": name, "type": "company_info", "source": f"{ticker}_info"},
-    )
-
-    documents: list[Document] = [info_doc]
-
-    if not hist.empty:
-        lines = [
-            f"{date.strftime('%Y-%m-%d')}: Open={row['Open']:.2f}, High={row['High']:.2f}, "
-            f"Low={row['Low']:.2f}, Close={row['Close']:.2f}, Volume={int(row['Volume']):,}"
-            for date, row in hist.tail(5).iterrows()
-        ]
-        history_doc = Document(
-            page_content=f"Recent price history for {ticker} ({name}):\n" + "\n".join(lines),
-            metadata={"ticker": ticker, "name": name, "type": "price_history", "source": f"{ticker}_history"},
-        )
-        documents.append(history_doc)
-
-    return documents
-
-
-def _fetch_ticker_with_retry(ticker: str, session: requests.Session) -> list[Document]:
-    """Fetch live documents for one ticker with exponential backoff, falling back to static data."""
-    last_exc: Exception | None = None
-    for attempt in range(_MAX_RETRIES):
-        try:
-            docs = _fetch_ticker_documents(ticker, session)
-            logger.info("[%s] fetched live data — %d document(s)", ticker, len(docs))
-            return docs
-        except Exception as exc:
-            last_exc = exc
-            if attempt < _MAX_RETRIES - 1:
-                wait = _BACKOFF_SECONDS[attempt]
-                logger.warning(
-                    "[%s] attempt %d/%d failed (%s) — retrying in %ds",
-                    ticker, attempt + 1, _MAX_RETRIES, exc, wait,
-                )
-                time.sleep(wait)
-
-    logger.warning(
-        "[%s] all %d live attempts failed (%s) — using static fallback data",
-        ticker, _MAX_RETRIES, last_exc,
-    )
-    return _static_documents(ticker)
-
-
-def _ingest_all_sync() -> list[Document]:
-    """Fetch all tickers sequentially with a delay between each."""
-    session = _make_session()
-    all_documents: list[Document] = []
-
-    for i, ticker in enumerate(TICKERS):
-        if i > 0:
-            time.sleep(_INTER_TICKER_DELAY)
-        docs = _fetch_ticker_with_retry(ticker, session)
-        all_documents.extend(docs)
-
-    return all_documents
-
-
 async def fetch_and_ingest_ticker_data() -> int:
-    loop = asyncio.get_event_loop()
-    all_documents = await loop.run_in_executor(None, _ingest_all_sync)
-
-    if not all_documents:
-        logger.error("[data_ingestion] no documents produced — ingestion aborted")
-        return 0
+    all_documents: list[Document] = []
+    for ticker in TICKERS:
+        all_documents.extend(_static_documents(ticker))
 
     count = await ingest_documents(all_documents)
     logger.info("[data_ingestion] ingestion complete — %d documents stored", count)
