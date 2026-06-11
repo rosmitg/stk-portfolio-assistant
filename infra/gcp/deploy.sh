@@ -25,9 +25,12 @@ docker build \
 echo "==> Building frontend image"
 docker build \
   --platform linux/amd64 \
+  --build-arg VITE_BACKEND_URL=https://stk-backend-512165788990.australia-southeast1.run.app \
+  --build-arg VITE_SUPABASE_URL=https://djznfhdirxfnzuzgirjb.supabase.co \
+  --build-arg VITE_SUPABASE_ANON_KEY=sb_publishable_zYgFa8LPRw6wWgGYpaFEMg_NkXRyciU \
   -t "${FRONTEND_IMAGE}:${TAG}" \
   -t "${FRONTEND_IMAGE}:latest" \
-  "${REPO_ROOT}/frontend"
+  "${REPO_ROOT}/frontend-react"
 
 echo "==> Pushing backend image"
 docker push "${BACKEND_IMAGE}:${TAG}"
