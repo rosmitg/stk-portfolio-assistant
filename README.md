@@ -1,152 +1,177 @@
-# STK Portfolio Assistant
+# stk-portfolio-assistant
 
-An AI-powered stock portfolio assistant that answers natural language questions about your holdings using real-time market data, financial news, and a vector-search knowledge base — backed by Claude and LangChain.
+A conversational portfolio assistant — ask questions about your holdings, get live prices and news, and let an LLM-backed agent figure out which tool to use.
 
-**Live demo:** _https://your-app-url.run.app_ _(placeholder — update after deploy)_
-
----
-
-## Stack
-
-| Layer | Technology |
-|-------|-----------|
-| Frontend | Streamlit, Plotly |
-| Backend | FastAPI, Uvicorn |
-| AI / Agent | LangChain, Claude (Anthropic) |
-| Vector store | ChromaDB (local), Pinecone (production) |
-| Market data | yfinance |
-| News | NewsAPI |
-| Observability | LangSmith |
-| Database | PostgreSQL (SQLAlchemy 2.0) |
-| Containers | Docker, Docker Compose |
-| Cloud | GCP Cloud Run, Artifact Registry, Cloud Build |
-| Python | 3.11 |
+**Live demo:** https://stk-frontend-512165788990.australia-southeast1.run.app
+_(requires sign-up via Supabase auth — email/password, no OAuth)_
 
 ---
 
-## Project Structure
+## What it does
 
-```
-stk-portfolio-assistant/
-├── backend/
-│   ├── app/
-│   │   ├── api/routes/      # API route handlers
-│   │   ├── core/config.py   # Pydantic settings
-│   │   ├── models/          # SQLAlchemy models
-│   │   ├── schemas/         # Pydantic schemas
-│   │   ├── services/        # Business logic & agent
-│   │   └── main.py          # FastAPI app entry point
-│   ├── tests/
-│   ├── Dockerfile
-│   └── requirements.txt
-├── frontend/
-│   ├── app.py               # Streamlit entry point
-│   ├── Dockerfile
-│   └── requirements.txt
-├── infra/
-│   ├── docker/              # Production compose
-│   └── gcp/                 # Cloud Build config
-├── docs/
-│   ├── architecture.md
-│   └── adr/                 # Architecture Decision Records
-├── docker-compose.yml
-├── Makefile
-├── .env.example
-└── .pre-commit-config.yaml
-```
+You add your stock holdings (via Alpaca paper trading sync, CSV upload, or manual entry), then chat with an agent that can look up live prices, pull recent news, run portfolio calculations, and search ingested research documents. The agent uses LangChain's tool-calling loop with Claude as the backbone, so it decides which tool to hit based on what you actually asked — you don't have to tell it.
 
 ---
 
-## Local Setup
+## Features
 
-### Prerequisites
-
-- Python 3.11
-- Docker & Docker Compose
-- A `.env` file — copy from `.env.example` and fill in your keys
-
-```bash
-cp .env.example .env
-```
-
-### Option A — Docker Compose (recommended)
-
-```bash
-docker compose up --build
-```
-
-- Backend: http://localhost:8000
-- Frontend: http://localhost:8501
-- API docs: http://localhost:8000/docs
-
-### Option B — Local Python
-
-```bash
-make install        # install backend + frontend deps, enable pre-commit hooks
-make run-backend    # terminal 1
-make run-frontend   # terminal 2
-```
+- **Chat interface** — ask about individual tickers, your overall portfolio, or general market questions
+- **Agent tool dispatch** — live price lookup (Alpaca → yfinance fallback), news search via NewsAPI, portfolio maths (P&L, allocation, sector breakdown), RAG search over ingested documents
+- **Portfolio ingestion** — sync from Alpaca paper trading account, upload a CSV, or add positions manually
+- **Live prices** — Alpaca's market data API with a yfinance fallback
+- **Charts** — allocation pie and P&L line charts via Recharts
+- **Auth** — Supabase email/password with JWT verification on the backend
 
 ---
 
-## Development Commands
+## Tech stack
 
-```bash
-make help           # list all commands
-make test           # run pytest
-make lint           # ruff check
-make format         # ruff format
-make type-check     # mypy
-make pre-commit     # run all hooks against every file
-make clean          # remove caches and build artefacts
-```
-
----
-
-## Environment Variables
-
-See `.env.example` for the full list. Key variables:
-
-| Variable | Description |
-|----------|-------------|
-| `ANTHROPIC_API_KEY` | Claude API key |
-| `LANGCHAIN_API_KEY` | LangSmith API key |
-| `LANGCHAIN_PROJECT` | LangSmith project name |
-| `NEWS_API_KEY` | NewsAPI key |
-| `PINECONE_API_KEY` | Pinecone API key |
-| `PINECONE_ENVIRONMENT` | Pinecone environment (e.g. `us-east-1-aws`) |
-| `DATABASE_URL` | PostgreSQL connection string |
-| `APP_ENV` | `development` or `production` |
-| `DEBUG` | `true` / `false` |
+| Layer | What |
+|---|---|
+| Frontend | React 18, TypeScript, Tailwind CSS, Recharts, Vite |
+| Backend | FastAPI, Python 3.11, SQLAlchemy (async), asyncpg |
+| Agent / LLM | LangChain, Claude API (claude-sonnet-4-5) |
+| RAG | ChromaDB, Voyage AI embeddings |
+| Observability | LangSmith (tracing + evals) |
+| Auth | Supabase (email/password, JWKS JWT verification) |
+| Data | Alpaca Markets API, yfinance, NewsAPI |
+| Infra | GCP Cloud Run, Cloud SQL (Postgres), Artifact Registry, Secret Manager, Cloud Build |
 
 ---
 
 ## Architecture
 
-See [docs/architecture.md](docs/architecture.md) for the full system diagram, component breakdown, and GCP infrastructure overview.
+```
+User
+ │
+ ▼
+React (Vite SPA)
+ │  REST + streaming
+ ▼
+FastAPI
+ │
+ ▼
+LangChain Agent (tool-calling loop)
+ │
+ ├── ticker_info    → Alpaca / yfinance
+ ├── news_search    → NewsAPI
+ ├── portfolio_calc → Cloud SQL (user's holdings)
+ └── rag_search     → ChromaDB (Voyage AI embeddings)
+ │
+ ▼
+Claude (claude-sonnet-4-5)
+```
+
+The agent runs a standard ReAct loop — Claude decides which tools to call, the executor runs them, results go back into context, and Claude produces a final answer. Streaming is handled via FastAPI `StreamingResponse`, so the frontend gets tokens as they arrive.
 
 ---
 
-## Deployment (GCP Cloud Run)
+## Evaluation
+
+Evals run via LangSmith using a 10-question set covering price lookups, portfolio questions, and general market queries. Current results:
+
+- **Relevance score: ~0.81** (LLM-as-judge on a 0–1 scale)
+- **17 passing tests** across agent tools and API routes
+
+The main failure modes are the agent over-fetching tools when a simpler answer would do, and the RAG search returning low-signal chunks when the ingested corpus is sparse.
+
+---
+
+## Running locally
+
+### Prerequisites
+
+- Python 3.11+
+- Node 20+
+- Docker (for Postgres) or a local Postgres instance
+
+### Backend
 
 ```bash
-# Build and push images
-gcloud builds submit --config infra/gcp/cloudbuild.yaml
+cd backend
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
 
-# Or trigger automatically on push to main via Cloud Build trigger
-git push origin main
+cp .env.example .env
+# fill in: ANTHROPIC_API_KEY, VOYAGE_API_KEY, NEWS_API_KEY,
+#          ALPACA_API_KEY, ALPACA_SECRET_KEY, DATABASE_URL,
+#          SUPABASE_URL, SUPABASE_SERVICE_KEY
+
+uvicorn app.main:app --reload --port 8000
+```
+
+Postgres via Docker if you don't have one running:
+
+```bash
+docker run -d \
+  --name stk-postgres \
+  -e POSTGRES_DB=stk_portfolio \
+  -e POSTGRES_USER=user \
+  -e POSTGRES_PASSWORD=password \
+  -p 5432:5432 \
+  postgres:15
+```
+
+### Frontend
+
+```bash
+cd frontend-react
+cp .env.example .env
+# VITE_BACKEND_URL=http://localhost:8000
+# VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY from your Supabase project dashboard
+
+npm install
+npm run dev
+```
+
+### Tests
+
+```bash
+cd backend && pytest tests/ -v
 ```
 
 ---
 
-## Contributing
+## Project structure
 
-1. Fork the repo and create a feature branch.
-2. Run `make pre-commit` before committing.
-3. Open a PR — use the template in `.github/PULL_REQUEST_TEMPLATE.md`.
+```
+stk-portfolio-assistant/
+├── backend/
+│   ├── app/
+│   │   ├── api/routes/        # chat, portfolio, ingest, evaluate endpoints
+│   │   ├── core/              # config, Supabase JWT auth
+│   │   ├── models/            # SQLAlchemy ORM models
+│   │   ├── schemas/           # Pydantic request/response schemas
+│   │   └── services/
+│   │       ├── agent.py       # LangChain agent + tool definitions
+│   │       ├── alpaca_service.py
+│   │       ├── database.py
+│   │       ├── evaluator.py   # LangSmith eval runner
+│   │       ├── rag.py         # ChromaDB query
+│   │       └── vector_store.py
+│   ├── prompts/               # YAML system prompts
+│   └── tests/
+├── frontend-react/
+│   └── src/
+│       ├── api/               # Axios client
+│       ├── components/        # Auth, Chat, Holdings, Charts, Onboarding
+│       ├── hooks/             # useAuth
+│       └── lib/               # Supabase client
+├── infra/
+│   └── gcp/
+│       ├── deploy.sh          # build → push → Cloud Run deploy
+│       ├── cloudbuild.yaml
+│       ├── setup_database.sh
+│       └── setup_secrets.sh
+└── docker-compose.yml
+```
 
 ---
 
-## License
+## What's next
 
-MIT
+- **Risk analysis** — portfolio beta, volatility, correlation heatmap across holdings
+- **Earnings calendar** — surface upcoming earnings dates for held tickers and feed them into agent context
+- **Real broker integration** — currently paper trading only via Alpaca; a read-only brokerage API (IBKR, Schwab) would make this actually useful day-to-day
+- **Better RAG** — the current corpus is thin; proper document ingestion (10-Ks, analyst reports) would improve the research tool substantially
+- **Streaming tool results** — individual tool calls don't surface incrementally in the UI yet, only the final answer streams
