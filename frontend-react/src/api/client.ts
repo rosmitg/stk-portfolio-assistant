@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { Holding, AddHoldingPayload, ChatResponse } from '../types';
+import type { Holding, AddHoldingPayload } from '../types';
 import { supabase } from '../lib/supabase';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
