@@ -21,15 +21,15 @@ services:
 
   frontend:
     build:
-      context: ./frontend
+      context: ./frontend-react
       dockerfile: Dockerfile
+      args:
+        VITE_BACKEND_URL: "${VITE_BACKEND_URL:-http://localhost:8080}"
+        VITE_SUPABASE_URL: "${VITE_SUPABASE_URL:-}"
+        VITE_SUPABASE_ANON_KEY: "${VITE_SUPABASE_ANON_KEY:-}"
     container_name: stk-frontend
     ports:
       - "8081:8080"
-    env_file:
-      - .env
-    environment:
-      - BACKEND_URL=http://backend:8080
     depends_on:
       backend:
         condition: service_healthy
