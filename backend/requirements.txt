@@ -21,7 +21,7 @@ langsmith==0.1.77
 # Data
 yfinance==0.2.40
 newsapi-python==0.2.7
-alpaca-trade-api==3.3.2
+alpaca-trade-api==3.2.0
 python-multipart==0.0.9
 
 # Config / validation
