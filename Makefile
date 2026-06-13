@@ -8,14 +8,14 @@ help: ## Show available commands
 
 install: ## Install all dependencies (backend + frontend)
 	cd backend && pip install -r requirements.txt
-	cd frontend && pip install -r requirements.txt
+	cd frontend-react && npm install
 	pre-commit install
 
 run-backend: ## Start the FastAPI backend (uvicorn, hot-reload)
 	cd backend && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
-run-frontend: ## Start the Streamlit frontend
-	cd frontend && streamlit run app.py --server.port 8501
+run-frontend: ## Start the React frontend (Vite dev server)
+	cd frontend-react && npm run dev
 
 run-all: ## Start backend and frontend concurrently
 	$(MAKE) run-backend & $(MAKE) run-frontend
@@ -24,10 +24,10 @@ test: ## Run the test suite
 	cd backend && pytest tests/ -v
 
 lint: ## Lint with ruff
-	ruff check backend/ frontend/
+	ruff check backend/
 
 format: ## Format with ruff
-	ruff format backend/ frontend/
+	ruff format backend/
 
 type-check: ## Type-check with mypy
 	mypy backend/app

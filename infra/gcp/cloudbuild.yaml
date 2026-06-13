@@ -25,7 +25,7 @@ steps:
       - --platform=linux/amd64
       - -t=$_FRONTEND_IMAGE:$_TAG
       - -t=$_FRONTEND_IMAGE:latest
-      - frontend
+      - frontend-react
     waitFor: ['-']
 
   # ── Push ───────────────────────────────────────────────────────────────────

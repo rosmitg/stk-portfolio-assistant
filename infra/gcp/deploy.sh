@@ -50,7 +50,7 @@ gcloud run deploy stk-backend \
   --allow-unauthenticated \
   --memory 512Mi \
   --cpu 1 \
-  --min-instances 0 \
+  --min-instances 1 \
   --max-instances 3 \
   --set-secrets "ANTHROPIC_API_KEY=ANTHROPIC_API_KEY:latest,VOYAGE_API_KEY=VOYAGE_API_KEY:latest,NEWS_API_KEY=NEWS_API_KEY:latest,LANGCHAIN_API_KEY=LANGCHAIN_API_KEY:latest,LANGCHAIN_PROJECT=LANGCHAIN_PROJECT:latest,DATABASE_URL=DATABASE_URL:latest,SUPABASE_URL=SUPABASE_URL:latest,SUPABASE_SERVICE_KEY=SUPABASE_SERVICE_KEY:latest,ALPACA_API_KEY=ALPACA_API_KEY:latest,ALPACA_SECRET_KEY=ALPACA_SECRET_KEY:latest" \
   --set-env-vars "APP_ENV=production,LANGCHAIN_TRACING_V2=true" \
@@ -73,7 +73,7 @@ gcloud run deploy stk-frontend \
   --allow-unauthenticated \
   --memory 512Mi \
   --cpu 1 \
-  --min-instances 0 \
+  --min-instances 1 \
   --max-instances 3 \
   --set-env-vars "BACKEND_URL=${BACKEND_URL},APP_ENV=production"
 
