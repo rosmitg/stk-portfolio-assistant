@@ -1,3 +1,4 @@
+import asyncio
 import csv
 import io
 import logging
@@ -25,25 +26,30 @@ _STATIC_PRICES: dict[str, float] = {
 Db = Annotated[Optional[AsyncSession], Depends(get_db)]
 
 
-def _enrich(holding: Holding) -> PortfolioHolding:
-    sym = holding.ticker.upper()
-    current_price: Optional[float] = None
-
+def _fetch_price(sym: str) -> Optional[float]:
+    """Blocking live-price fetch: Alpaca first, then yfinance. Returns None if both fail."""
     # Try Alpaca first
     try:
         from app.services.alpaca_service import get_live_price
-        current_price = get_live_price(sym)
+        price = get_live_price(sym)
+        if price is not None:
+            return price
     except Exception:
         pass
 
     # Fall back to yfinance
-    if current_price is None:
-        try:
-            lp = yf.Ticker(sym).fast_info.last_price
-            if lp is not None:
-                current_price = float(lp)
-        except Exception:
-            pass
+    try:
+        lp = yf.Ticker(sym).fast_info.last_price
+        if lp is not None:
+            return float(lp)
+    except Exception:
+        pass
+
+    return None
+
+
+def _build_holding(holding: Holding, current_price: Optional[float]) -> PortfolioHolding:
+    sym = holding.ticker.upper()
 
     # Final fallback
     if current_price is None:
@@ -64,6 +70,14 @@ def _enrich(holding: Holding) -> PortfolioHolding:
         gain_loss=round(gain_loss, 2),
         gain_loss_pct=round(gain_loss_pct, 2),
     )
+
+
+async def _enrich_all(holdings: list[Holding]) -> list[PortfolioHolding]:
+    """Enrich holdings with live prices, fetching all prices concurrently."""
+    prices = await asyncio.gather(
+        *(asyncio.to_thread(_fetch_price, h.ticker.upper()) for h in holdings)
+    )
+    return [_build_holding(h, price) for h, price in zip(holdings, prices)]
 
 
 async def _upsert_holding(
@@ -105,7 +119,7 @@ async def get_portfolio(user_id: CurrentUser, db: Db) -> list[PortfolioHolding]:
         result = await db.execute(
             select(Holding).where(Holding.user_id == user_id).order_by(Holding.created_at)
         )
-        return [_enrich(h) for h in result.scalars().all()]
+        return await _enrich_all(list(result.scalars().all()))
     except Exception as exc:
         logger.warning("DB read failed: %s", exc)
         return []
@@ -126,7 +140,7 @@ async def add_holding(body: AddHoldingRequest, user_id: CurrentUser, db: Db) -> 
         )
         await db.commit()
         await db.refresh(holding)
-        return _enrich(holding)
+        return (await _enrich_all([holding]))[0]
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"Database unavailable: {exc}") from exc
 
@@ -160,7 +174,7 @@ async def sync_from_alpaca(user_id: CurrentUser, db: Db) -> list[PortfolioHoldin
         result = await db.execute(
             select(Holding).where(Holding.user_id == user_id).order_by(Holding.created_at)
         )
-        return [_enrich(h) for h in result.scalars().all()]
+        return await _enrich_all(list(result.scalars().all()))
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"Database unavailable: {exc}") from exc
 
@@ -211,7 +225,7 @@ async def upload_csv(file: CsvFile, user_id: CurrentUser, db: Db) -> list[Portfo
         result = await db.execute(
             select(Holding).where(Holding.user_id == user_id).order_by(Holding.created_at)
         )
-        return [_enrich(h) for h in result.scalars().all()]
+        return await _enrich_all(list(result.scalars().all()))
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"Database unavailable: {exc}") from exc
 
