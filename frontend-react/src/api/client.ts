@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { Holding, AddHoldingPayload } from '../types';
+import type { Holding, AddHoldingPayload, Brief } from '../types';
 import { supabase } from '../lib/supabase';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
@@ -28,6 +28,14 @@ export const deleteHolding = (ticker: string) =>
 
 export const syncAlpaca = () =>
   api.post<Holding[]>('/portfolio/sync-alpaca', {});
+
+// Today's brief for the current user. Resolves 404 (rejected) when none exists yet.
+export const getTodayBrief = () =>
+  api.get<Brief>('/brief/today');
+
+// Triggers brief generation via the Watchman service — can take ~a minute.
+export const generateBrief = () =>
+  api.post<Brief>('/brief/generate', {}, { timeout: 180_000 });
 
 export const uploadCsv = (file: File) => {
   const form = new FormData();

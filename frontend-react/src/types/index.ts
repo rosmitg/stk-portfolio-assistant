@@ -31,3 +31,27 @@ export interface ChatResponse {
   answer: string;
   sources: string[];
 }
+
+export interface BriefSection {
+  title: string;
+  body: string;
+  tickers: string[];
+}
+
+export interface BriefAlert {
+  ticker: string;
+  type: string;
+  title: string;
+  body: string;
+  triggered_at?: string;
+  read?: boolean;
+}
+
+export interface Brief {
+  user_id: string;
+  date: string;
+  headline: string;
+  portfolio_health: number;
+  sections: BriefSection[];
+  alerts: BriefAlert[];
+}

@@ -98,9 +98,13 @@ const LS_HISTORY  = 'stk_chat_history';
 
 interface ChatPanelProps {
   holdings: Holding[];
+  /** When provided, this message is auto-sent once on mount (e.g. from the Brief tab). */
+  initialMessage?: string;
+  /** Called after the initial message has been auto-sent, so the parent can clear it. */
+  onInitialConsumed?: () => void;
 }
 
-export function ChatPanel({ holdings }: ChatPanelProps) {
+export function ChatPanel({ holdings, initialMessage, onInitialConsumed }: ChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     try {
       const saved = localStorage.getItem(LS_MESSAGES);
@@ -111,6 +115,7 @@ export function ChatPanel({ holdings }: ChatPanelProps) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const autoSentRef = useRef(false);
 
   // Persist messages and derived conversation history on every change
   useEffect(() => {
@@ -166,6 +171,17 @@ export function ChatPanel({ holdings }: ChatPanelProps) {
 
     setLoading(false);
   };
+
+  // Auto-send the initial message once on mount (e.g. "Chat about this" from a brief section).
+  useEffect(() => {
+    if (initialMessage && !autoSentRef.current) {
+      autoSentRef.current = true;
+      send(initialMessage);
+      onInitialConsumed?.();
+    }
+    // Run once on mount only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
