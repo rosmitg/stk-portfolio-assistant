@@ -38,5 +38,8 @@ class Settings(BaseSettings):
     chroma_persist_dir: str = "./chroma_db"
     chroma_collection_name: str = "portfolio_data"
 
+    # Watchman backend service (generates portfolio briefs).
+    watchman_backend_url: str = "http://localhost:8001"
+
 
 settings = Settings()

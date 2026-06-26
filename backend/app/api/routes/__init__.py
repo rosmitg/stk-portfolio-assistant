@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from app.api.routes.brief import router as brief_router
 from app.api.routes.chat import router as chat_router
 from app.api.routes.evaluate import router as evaluate_router
 from app.api.routes.ingest import router as ingest_router
@@ -10,3 +11,4 @@ api_router.include_router(chat_router)
 api_router.include_router(portfolio_router)
 api_router.include_router(ingest_router)
 api_router.include_router(evaluate_router)
+api_router.include_router(brief_router)
