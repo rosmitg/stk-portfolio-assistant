@@ -40,6 +40,10 @@ class Settings(BaseSettings):
 
     # Watchman backend service (generates portfolio briefs).
     watchman_backend_url: str = "http://localhost:8001"
+    # Shared secret for trusted service-to-service calls to Watchman. Sent in the
+    # X-Internal-Secret header so Watchman accepts the user_id we pass without a
+    # Supabase JWT (STK and Watchman use separate Supabase projects).
+    internal_service_secret: str = ""
 
 
 settings = Settings()

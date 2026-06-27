@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
 import { ChatPanel } from './components/ChatPanel';
@@ -7,7 +7,7 @@ import { Onboarding } from './components/Onboarding';
 import { Auth } from './components/Auth';
 import { useAuth } from './hooks/useAuth';
 import { getPortfolio, getTodayBrief } from './api/client';
-import type { Holding } from './types';
+import type { Holding, Brief } from './types';
 import './index.css';
 
 type Tab = 'brief' | 'chat';
@@ -20,6 +20,9 @@ export default function App() {
   const [tab, setTab] = useState<Tab>('chat');
   const [briefReady, setBriefReady] = useState(false);
   const [initialChatMessage, setInitialChatMessage] = useState<string | undefined>();
+  // Today's brief, cached at the App level so switching tabs never re-fetches.
+  const [brief, setBrief] = useState<Brief | null>(null);
+  const briefFetchedRef = useRef(false);
 
   const fetchPortfolio = useCallback(async () => {
     setPortfolioLoading(true);
@@ -35,19 +38,31 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (user) fetchPortfolio();
-    else setHoldings([]);
+    if (user) {
+      fetchPortfolio();
+    } else {
+      setHoldings([]);
+      // Reset cached brief state on sign-out so the next user fetches fresh.
+      setBrief(null);
+      setBriefReady(false);
+      briefFetchedRef.current = false;
+    }
   }, [user, fetchPortfolio]);
 
-  // Pick the default tab once holdings are known: Brief if one exists today, else Chat.
+  // Fetch today's brief once, cache it, and pick the default tab from the result:
+  // Brief if one exists today, else Chat. Switching tabs reuses the cached value.
   useEffect(() => {
-    if (!user) return;
-    if (holdings.length === 0) { setBriefReady(true); return; }
+    if (!user || holdings.length === 0) {
+      if (holdings.length === 0) setBriefReady(true);
+      return;
+    }
+    if (briefFetchedRef.current) return;
+    briefFetchedRef.current = true;
     let cancelled = false;
     (async () => {
       try {
-        await getTodayBrief();
-        if (!cancelled) setTab('brief');
+        const { data } = await getTodayBrief();
+        if (!cancelled) { setBrief(data); setTab('brief'); }
       } catch {
         if (!cancelled) setTab('chat');
       } finally {
@@ -116,7 +131,11 @@ export default function App() {
             </div>
 
             {tab === 'brief' ? (
-              <BriefPanel onChatAboutSection={openChatWith} />
+              <BriefPanel
+                brief={brief}
+                onBriefChange={setBrief}
+                onChatAboutSection={openChatWith}
+              />
             ) : (
               <ChatPanel
                 holdings={holdings}

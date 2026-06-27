@@ -1,10 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { RefreshCw, MessageSquare, Sparkles, AlertTriangle } from 'lucide-react';
 import axios from 'axios';
-import { getTodayBrief, generateBrief } from '../api/client';
+import { generateBrief } from '../api/client';
 import type { Brief, BriefSection } from '../types';
 
 interface BriefPanelProps {
+  /** Today's brief, cached by App. null means none exists yet. */
+  brief: Brief | null;
+  /** Report a freshly generated brief back to App so it stays cached. */
+  onBriefChange: (brief: Brief) => void;
   /** Switch to the Chat tab and pre-load this text as the first message. */
   onChatAboutSection: (message: string) => void;
 }
@@ -21,41 +25,16 @@ function sectionPrompt(section: BriefSection): string {
   return `Tell me more about this part of my daily brief — "${section.title}"${tickers}:\n\n${section.body}`;
 }
 
-export function BriefPanel({ onChatAboutSection }: BriefPanelProps) {
-  const [brief, setBrief] = useState<Brief | null>(null);
-  const [loading, setLoading] = useState(true);
+export function BriefPanel({ brief, onBriefChange, onChatAboutSection }: BriefPanelProps) {
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // On mount: fetch today's brief. A 404 simply means none exists yet.
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const { data } = await getTodayBrief();
-        if (!cancelled) setBrief(data);
-      } catch (err) {
-        if (cancelled) return;
-        if (axios.isAxiosError(err) && err.response?.status === 404) {
-          setBrief(null);
-        } else {
-          setError('Could not load your brief.');
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
 
   const handleGenerate = async () => {
     setGenerating(true);
     setError(null);
     try {
       const { data } = await generateBrief();
-      setBrief(data);
+      onBriefChange(data);
     } catch (err) {
       const detail =
         axios.isAxiosError(err) && typeof err.response?.data?.detail === 'string'
@@ -67,8 +46,8 @@ export function BriefPanel({ onChatAboutSection }: BriefPanelProps) {
     }
   };
 
-  // ── Loading / generating state ──
-  if (loading || generating) {
+  // ── Generating state ──
+  if (generating) {
     return (
       <div className="flex-1 flex items-center justify-center bg-dark">
         <div className="text-center">
@@ -82,7 +61,7 @@ export function BriefPanel({ onChatAboutSection }: BriefPanelProps) {
             ))}
           </div>
           <div className="text-sm text-muted">
-            {generating ? 'Generating your brief… this can take ~a minute' : 'Loading your brief…'}
+            Generating your brief… this can take ~a minute
           </div>
         </div>
       </div>

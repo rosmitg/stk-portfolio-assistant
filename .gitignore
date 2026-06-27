@@ -1,5 +1,8 @@
 # Environment
 .env
+.env.*
+!.env.example
+*.bak
 .langsmith
 
 # Python

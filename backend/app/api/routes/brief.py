@@ -5,7 +5,6 @@ from typing import Annotated, Optional
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,10 +18,6 @@ router = APIRouter(prefix="/brief", tags=["brief"])
 logger = logging.getLogger(__name__)
 
 Db = Annotated[Optional[AsyncSession], Depends(get_db)]
-
-# Bearer scheme used to capture the raw token so it can be forwarded to Watchman.
-_bearer = HTTPBearer()
-BearerToken = Annotated[HTTPAuthorizationCredentials, Depends(_bearer)]
 
 
 class BriefResponse(BaseModel):
@@ -87,19 +82,22 @@ async def get_brief_history(user_id: CurrentUser, db: Db) -> list[Brief]:
 
 
 @router.post("/generate")
-async def generate_brief(user_id: CurrentUser, credentials: BearerToken) -> JSONResponse:
+async def generate_brief(user_id: CurrentUser) -> JSONResponse:
     """Trigger brief generation for the current user via the Watchman service.
 
-    Watchman runs the LangGraph pipeline in its own backend. We forward the
-    caller's bearer token so Watchman authenticates the same user, then relay
-    Watchman's response (status and body) straight back to the STK frontend.
+    STK authenticates the user here (CurrentUser) against its own Supabase, then
+    calls Watchman as a trusted service: it sends the shared internal secret and
+    the validated user_id, rather than forwarding the user's JWT (STK and
+    Watchman use separate Supabase projects, so the JWT wouldn't validate there).
+    Watchman's response is relayed back to the STK frontend unchanged.
     """
     url = f"{settings.watchman_backend_url}/api/v1/brief/generate"
     try:
         async with httpx.AsyncClient(timeout=120.0) as client:
             resp = await client.post(
                 url,
-                headers={"Authorization": f"Bearer {credentials.credentials}"},
+                headers={"X-Internal-Secret": settings.internal_service_secret},
+                json={"user_id": user_id},
             )
     except httpx.RequestError as exc:
         logger.warning("Watchman service unreachable at %s: %s", url, exc)
