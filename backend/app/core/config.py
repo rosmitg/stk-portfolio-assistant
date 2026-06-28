@@ -45,5 +45,9 @@ class Settings(BaseSettings):
     # Supabase JWT (STK and Watchman use separate Supabase projects).
     internal_service_secret: str = ""
 
+    # Resend transactional email. Brief emails are sent by Watchman, but the key
+    # is configured on both services for parity.
+    resend_api_key: Optional[str] = None
+
 
 settings = Settings()

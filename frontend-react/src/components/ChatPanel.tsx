@@ -115,7 +115,12 @@ export function ChatPanel({ holdings, initialMessage, onInitialConsumed }: ChatP
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const autoSentRef = useRef(false);
+  // Tracks which initialMessage we've already auto-sent. ChatPanel now stays
+  // mounted across tab switches, so we react to initialMessage changes rather
+  // than to mount; this dedupes against re-renders while still allowing a new
+  // "Chat about this" (and even the same prompt twice, since the prop is cleared
+  // to undefined between sends).
+  const sentInitialRef = useRef<string | undefined>(undefined);
 
   // Persist messages and derived conversation history on every change
   useEffect(() => {
@@ -172,16 +177,20 @@ export function ChatPanel({ holdings, initialMessage, onInitialConsumed }: ChatP
     setLoading(false);
   };
 
-  // Auto-send the initial message once on mount (e.g. "Chat about this" from a brief section).
+  // Auto-send the initial message when it arrives (e.g. "Chat about this" from a
+  // brief section). The panel stays mounted across tab switches, so this keys off
+  // the prop, not mount. onInitialConsumed clears it afterwards.
   useEffect(() => {
-    if (initialMessage && !autoSentRef.current) {
-      autoSentRef.current = true;
-      send(initialMessage);
-      onInitialConsumed?.();
+    if (!initialMessage) {
+      sentInitialRef.current = undefined;
+      return;
     }
-    // Run once on mount only.
+    if (sentInitialRef.current === initialMessage) return;
+    sentInitialRef.current = initialMessage;
+    send(initialMessage);
+    onInitialConsumed?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [initialMessage]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

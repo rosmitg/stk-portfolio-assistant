@@ -130,19 +130,23 @@ export default function App() {
               ))}
             </div>
 
-            {tab === 'brief' ? (
+            {/* Both panels stay mounted; we toggle visibility so switching tabs
+                never unmounts/remounts (and never re-fetches or re-renders from
+                scratch). State — brief, chat history, scroll — is preserved. */}
+            <div className={`flex-1 flex flex-col overflow-hidden ${tab === 'brief' ? '' : 'hidden'}`}>
               <BriefPanel
                 brief={brief}
                 onBriefChange={setBrief}
                 onChatAboutSection={openChatWith}
               />
-            ) : (
+            </div>
+            <div className={`flex-1 flex flex-col overflow-hidden ${tab === 'chat' ? '' : 'hidden'}`}>
               <ChatPanel
                 holdings={holdings}
                 initialMessage={initialChatMessage}
                 onInitialConsumed={() => setInitialChatMessage(undefined)}
               />
-            )}
+            </div>
           </div>
         </div>
       )}
