@@ -32,6 +32,20 @@ STK is an AI portfolio assistant with two modes. The **Chat** tab runs a LangCha
 
 ---
 
+## Screenshots
+
+**Daily Brief**
+![Daily Brief](docs/screenshots/brief_ss.png)
+
+**Portfolio Chat**
+![Chat](docs/screenshots/chat_ss1.png)
+![Chat Response](docs/screenshots/chatss2.png)
+
+**Email Delivery**
+![Email Brief](docs/screenshots/emailss.png)
+
+---
+
 ## Architecture
 
 ```
