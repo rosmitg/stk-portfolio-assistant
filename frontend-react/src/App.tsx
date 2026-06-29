@@ -12,17 +12,84 @@ import './index.css';
 
 type Tab = 'brief' | 'chat';
 
+const BRIEF_CACHE_KEY = 'stk_today_brief';
+
+/** Local YYYY-MM-DD — scopes the cached brief to "today". */
+function localDateStr(d: Date = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+    d.getDate(),
+  ).padStart(2, '0')}`;
+}
+
+/** Read the cached brief, but only if it was stored today; clear it otherwise. */
+function readCachedBrief(): Brief | null {
+  try {
+    const raw = localStorage.getItem(BRIEF_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { date: string; brief: Brief };
+    if (parsed.date !== localDateStr()) {
+      localStorage.removeItem(BRIEF_CACHE_KEY); // stale — past midnight
+      return null;
+    }
+    return parsed.brief ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedBrief(brief: Brief): void {
+  try {
+    localStorage.setItem(BRIEF_CACHE_KEY, JSON.stringify({ date: localDateStr(), brief }));
+  } catch {
+    /* storage full/unavailable — non-fatal */
+  }
+}
+
+function clearCachedBrief(): void {
+  try {
+    localStorage.removeItem(BRIEF_CACHE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Milliseconds until just after the next local midnight. */
+function msUntilMidnight(): number {
+  const now = new Date();
+  const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 5);
+  return next.getTime() - now.getTime();
+}
+
 export default function App() {
   const { user, loading: authLoading, signOut } = useAuth();
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [portfolioLoading, setPortfolioLoading] = useState(false);
   const [connected, setConnected] = useState(true);
-  const [tab, setTab] = useState<Tab>('chat');
-  const [briefReady, setBriefReady] = useState(false);
   const [initialChatMessage, setInitialChatMessage] = useState<string | undefined>();
+
+  // Read the localStorage-cached brief exactly once on mount (valid only if it
+  // was stored today). Showing it immediately avoids a loading flash; we then
+  // re-fetch in the background and update if it changed.
+  const cachedReadRef = useRef(false);
+  const cachedOnMountRef = useRef<Brief | null>(null);
+  if (!cachedReadRef.current) {
+    cachedReadRef.current = true;
+    cachedOnMountRef.current = readCachedBrief();
+  }
+  const cachedOnMount = cachedOnMountRef.current;
+
   // Today's brief, cached at the App level so switching tabs never re-fetches.
-  const [brief, setBrief] = useState<Brief | null>(null);
+  const [brief, setBrief] = useState<Brief | null>(cachedOnMount);
+  const [briefReady, setBriefReady] = useState<boolean>(cachedOnMount !== null);
+  const [tab, setTab] = useState<Tab>(cachedOnMount ? 'brief' : 'chat');
+  const [briefRefreshKey, setBriefRefreshKey] = useState(0);
   const briefFetchedRef = useRef(false);
+
+  // Persist a brief (e.g. freshly generated in BriefPanel) to state + cache.
+  const handleBriefChange = useCallback((b: Brief) => {
+    setBrief(b);
+    writeCachedBrief(b);
+  }, []);
 
   const fetchPortfolio = useCallback(async () => {
     setPortfolioLoading(true);
@@ -46,11 +113,14 @@ export default function App() {
       setBrief(null);
       setBriefReady(false);
       briefFetchedRef.current = false;
+      clearCachedBrief();
     }
   }, [user, fetchPortfolio]);
 
-  // Fetch today's brief once, cache it, and pick the default tab from the result:
-  // Brief if one exists today, else Chat. Switching tabs reuses the cached value.
+  // Re-fetch today's brief in the background and update if it changed. A cached
+  // brief (read on mount) is already shown, so this never blocks the UI; when
+  // there's no cache, this also picks the default tab (Brief if one exists today,
+  // else Chat). Re-runs after midnight via briefRefreshKey.
   useEffect(() => {
     if (!user || holdings.length === 0) {
       if (holdings.length === 0) setBriefReady(true);
@@ -62,15 +132,43 @@ export default function App() {
     (async () => {
       try {
         const { data } = await getTodayBrief();
-        if (!cancelled) { setBrief(data); setTab('brief'); }
+        if (cancelled) return;
+        // Update only if the brief actually changed ("if newer").
+        setBrief((prev) =>
+          prev && JSON.stringify(prev) === JSON.stringify(data) ? prev : data,
+        );
+        writeCachedBrief(data);
+        // Only auto-switch to Brief when we didn't already show a cached brief —
+        // a background refresh shouldn't yank the user's current tab.
+        if (!cachedOnMount) setTab('brief');
       } catch {
-        if (!cancelled) setTab('chat');
+        if (cancelled) return;
+        // No brief today (404) or network error. Keep a same-day cached brief if
+        // we have one; otherwise default to Chat.
+        if (!cachedOnMount) setTab('chat');
       } finally {
         if (!cancelled) setBriefReady(true);
       }
     })();
     return () => { cancelled = true; };
-  }, [user, holdings.length]);
+  }, [user, holdings.length, cachedOnMount, briefRefreshKey]);
+
+  // Clear the cached brief at local midnight and re-fetch for the new day, so a
+  // long-open session never keeps showing yesterday's brief.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const schedule = () => {
+      timer = setTimeout(() => {
+        clearCachedBrief();
+        setBrief(null);
+        briefFetchedRef.current = false;
+        setBriefRefreshKey((k) => k + 1);
+        schedule(); // arm the following midnight
+      }, msUntilMidnight());
+    };
+    schedule();
+    return () => clearTimeout(timer);
+  }, []);
 
   const openChatWith = (message: string) => {
     setInitialChatMessage(message);
@@ -136,7 +234,7 @@ export default function App() {
             <div className={`flex-1 flex flex-col overflow-hidden ${tab === 'brief' ? '' : 'hidden'}`}>
               <BriefPanel
                 brief={brief}
-                onBriefChange={setBrief}
+                onBriefChange={handleBriefChange}
                 onChatAboutSection={openChatWith}
               />
             </div>
