@@ -1,3 +1,4 @@
+#Currently not avail(considering GCP costing and all) if you liked the concept lmk
 # STK Portfolio Assistant
 
 An AI portfolio assistant that pairs a conversational agent with a proactive daily brief. Ask questions about your holdings and get answers backed by live data — or open the Brief tab each morning for a portfolio rundown generated overnight by [Watchman](https://github.com/rosmitg/watchman).
